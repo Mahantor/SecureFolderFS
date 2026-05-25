@@ -1,0 +1,48 @@
+name: Build SecureFolderFS
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:  # اجازه اجرای دستی
+
+jobs:
+  build:
+    runs-on: windows-latest  # برای WinUI و Uno Platform بهتر است
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive  # مهم: زیرماژول‌ها هم clone شوند
+        
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+        
+    - name: Install Uno.Check
+      run: dotnet tool install --global Uno.Check
+        
+    - name: Run Uno.Check (verify dependencies)
+      run: uno-check --ci --non-interactive --fix
+        
+    - name: Restore NuGet packages
+      run: dotnet restore SecureFolderFS.Public.slnx
+      
+    - name: Build solution
+      run: dotnet build SecureFolderFS.Public.slnx --configuration Release --no-restore
+      
+    - name: Run tests (if any)
+      run: dotnet test tests/SecureFolderFS.Tests/SecureFolderFS.Tests.csproj --configuration Release --no-build --verbosity normal
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: SecureFolderFS-Build
+        path: |
+          **/bin/Release/**/*.dll
+          **/bin/Release/**/*.exe
+          **/bin/Release/**/*.pdb
+        compression-level: 0
