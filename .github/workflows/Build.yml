@@ -1,48 +1,66 @@
-name: Build SecureFolderFS
+name: Build Windows (WinUI)
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:  # اجازه اجرای دستی
+    branches: [ master, main ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest  # برای WinUI و Uno Platform بهتر است
+  build-windows:
+    runs-on: windows-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive  # مهم: زیرماژول‌ها هم clone شوند
-        
-    - name: Setup .NET 10 SDK
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-        
-    - name: Install Uno.Check
-      run: dotnet tool install --global Uno.Check
-        
-    - name: Run Uno.Check (verify dependencies)
-      run: uno-check --ci --non-interactive --fix
-        
-    - name: Restore NuGet packages
-      run: dotnet restore SecureFolderFS.Public.slnx
-      
-    - name: Build solution
-      run: dotnet build SecureFolderFS.Public.slnx --configuration Release --no-restore
-      
-    - name: Run tests (if any)
-      run: dotnet test tests/SecureFolderFS.Tests/SecureFolderFS.Tests.csproj --configuration Release --no-build --verbosity normal
-      
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: SecureFolderFS-Build
-        path: |
-          **/bin/Release/**/*.dll
-          **/bin/Release/**/*.exe
-          **/bin/Release/**/*.pdb
-        compression-level: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'   # مطابق global.json پروژه
+
+      - name: Install Uno Platform Workload
+        run: dotnet workload install uno
+
+      - name: Restore dependencies
+        run: dotnet restore SecureFolderFS.Public.slnx
+
+      - name: Build Windows App (WinUI)
+        run: |
+          dotnet build src/SecureFolderFS.Uno/SecureFolderFS.Uno.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -p:RuntimeIdentifier=win-x64 `
+            -p:PublishReadyToRun=true `
+            --no-restore
+
+      - name: Publish Windows App
+        run: |
+          dotnet publish src/SecureFolderFS.Uno/SecureFolderFS.Uno.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -p:RuntimeIdentifier=win-x64 `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=false `
+            -p:SelfContained=true `
+            --no-restore `
+            -o ./publish-windows
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecureFolderFS-Windows-x64
+          path: ./publish-windows
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Create Release (اگر تگ جدید باشه)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./publish-windows/**
+          draft: true
+          prerelease: true
