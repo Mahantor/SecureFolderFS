@@ -1,0 +1,49 @@
+name: Build Portable Windows x64
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-portable:
+    name: Build Portable Windows 11 x64
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore SecureFolderFS.Public.slnx
+
+      - name: Publish Portable x64
+        run: |
+          dotnet publish src/Platforms/SecureFolderFS.Uno/SecureFolderFS.Uno.csproj `
+            -c Release `
+            -f net9.0-windows10.0.26100.0 `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeAllContentForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:PublishTrimmed=false `
+            --output ./publish/SecureFolderFS-Portable-x64
+
+      - name: Upload Portable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecureFolderFS-Portable-Windows-x64
+          path: ./publish/SecureFolderFS-Portable-x64
+          if-no-files-found: error
+          retention-days: 14
